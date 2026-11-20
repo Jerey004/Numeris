@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 """NUMERIS v0.5 — offline symbolic relational oracle (Python 3.9+)."""
+import io
+import shutil
+import sys
+import textwrap
 import hashlib
 import json
 import sqlite3
 import math
 import secrets
 from collections import Counter
-from contextlib import closing
+from contextlib import closing, redirect_stdout
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -162,6 +166,36 @@ def cast():
 
 
 def display(record):
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        print_reading(record)
+        return
+
+    output = io.StringIO()
+    with redirect_stdout(output):
+        print_reading(record)
+    columns, rows = shutil.get_terminal_size()
+    width = max(1, columns - 1)
+    lines = []
+    for line in output.getvalue().strip().splitlines():
+        lines.extend(textwrap.wrap(line, width=width) or [''])
+    height = max(1, rows - 3)
+    pages = [lines[i:i + height] for i in range(0, len(lines), height)]
+    page = 0
+    while True:
+        print('\033[2J\033[H', end='')
+        print('\n'.join(pages[page]))
+        action = 'next' if page + 1 < len(pages) else 'done'
+        prompt = f'{page + 1}/{len(pages)} Enter:{action} b:back q:exit'
+        key = input(prompt[:width]).strip().lower()
+        if key == 'q' or (not key and page + 1 == len(pages)):
+            return
+        if key == 'b':
+            page = max(0, page - 1)
+        elif not key:
+            page += 1
+
+
+def print_reading(record):
     print('\n' + '=' * 58)
     print(f"NUMERIS v{record.get('version', '?')} | RELATIONAL ORACLE")
     print('=' * 58)
